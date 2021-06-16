@@ -1,66 +1,102 @@
-// (Lines like the one below ignore selected Clippy rules
-//  - it's useful when you want to check your code with `cargo make verify`
-// but some rules are too "annoying" or are not applicable for your case.)
 #![allow(clippy::wildcard_imports)]
+
+mod runner;
 
 use seed::{prelude::*, *};
 
-// ------ ------
-//     Init
-// ------ ------
-
-// `init` describes what should happen when your app started.
-fn init(_: Url, _: &mut impl Orders<Msg>) -> Model {
-    Model::default()
-}
-
-// ------ ------
-//     Model
-// ------ ------
-
-// `Model` describes our app state.
-type Model = i32;
-
-// ------ ------
-//    Update
-// ------ ------
-
-// (Remove the line below once any of your `Msg` variants doesn't implement `Copy`.)
-#[derive(Copy, Clone)]
-// `Msg` describes the different events you can modify state with.
-enum Msg {
-    Increment,
-}
-
-// `update` describes how to handle each `Msg`.
-fn update(msg: Msg, model: &mut Model, _: &mut impl Orders<Msg>) {
-    match msg {
-        Msg::Increment => *model += 1,
+fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
+    orders.after_next_render(Msg::Rendered);
+    runner::runner_init();
+    Model {
+        cnt: 0,
+        spinner: 0,
+        thread_ready: false,
+        thread_running: false,
+        stdout: String::new(),
+        stderr: String::new(),
     }
 }
 
-// ------ ------
-//     View
-// ------ ------
+struct Model {
+    cnt: i32,
+    spinner: i32,
+    thread_ready: bool,
+    thread_running: bool,
+    stdout: String,
+    stderr: String,
+}
 
-// (Remove the line below once your `Model` become more complex.)
-#[allow(clippy::trivially_copy_pass_by_ref)]
-// `view` describes what to display.
+enum Msg {
+    Increment,
+    Rendered(RenderInfo),
+    Run,
+    Stop,
+}
+
+fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
+    match msg {
+        Msg::Increment => model.cnt += 1,
+        Msg::Rendered(_) => {
+            model.spinner += 1;
+            if !model.thread_ready {
+                model.thread_ready = runner::poll_thread_init();
+            }
+            if model.thread_running {
+                let res = runner::poll_thread_result();
+                log!("result received:", res);
+                model.thread_running = res.is_none();
+                if let Some((s1, s2)) = res {
+                    model.stdout = s1;
+                    model.stderr = s2;
+                }
+            }
+            orders.after_next_render(Msg::Rendered);
+        }
+        Msg::Run => {
+            log!("Run clicked");
+            model.thread_running = true;
+            model.stdout.clear();
+            model.stderr.clear();
+            runner::run();
+        }
+        Msg::Stop => {
+            log!("Stop clicked");
+            model.thread_ready = false;
+            model.thread_running = false;
+            model.stdout.clear();
+            model.stderr.clear();
+            model.stderr += "aborted";
+            runner::reset();
+        }
+    }
+}
+
 fn view(model: &Model) -> Node<Msg> {
     div![
         C!["counter"],
         "This is a counter: ",
-        button![model, ev(Ev::Click, |_| Msg::Increment),],
+        button![model.cnt, ev(Ev::Click, |_| Msg::Increment),],
+        ".".repeat(model.spinner as usize / 10 % 10),
+        br![], br![],
+        button![
+            attrs!{ At::Disabled => (!model.thread_ready || model.thread_running).as_at_value() },
+            "Run!",
+            ev(Ev::Click, |_| Msg::Run),
+        ],
+        button![
+            attrs!{ At::Disabled => (!model.thread_ready || !model.thread_running).as_at_value() },
+            "Stop!",
+            ev(Ev::Click, |_| Msg::Stop),
+        ],
+        br![], br![],
+        "stdout",
+        div![&model.stdout],
+        "stderr",
+        div![&model.stderr],
     ]
 }
 
-// ------ ------
-//     Start
-// ------ ------
-
-// (This function is invoked by `init` function in `index.html`.)
-#[wasm_bindgen(start)]
+#[wasm_bindgen]
 pub fn start() {
-    // Mount the `app` to the element with the `id` "app".
     App::start("app", init, update, view);
 }

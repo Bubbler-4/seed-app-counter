@@ -9,8 +9,12 @@
 <body>
     <section id="app"></section>
     <script type="module">
-        import init from '/pkg/package.js';
-        init('/pkg/package_bg.wasm');
+        //import init from '/pkg/package.js';
+        //init('/pkg/package_bg.wasm');
+    </script>
+    <script src="./pkg/package.js"></script>
+    <script>
+        wasm_bindgen('./pkg/package_bg.wasm').then(_ => wasm_bindgen.start());
     </script>
 </body>
 
