@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_mt::prelude::*;
-use wasm_mt::Thread;
+use wasm_mt_patch::prelude::*;
+use wasm_mt_patch::Thread;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use seed::log;
@@ -109,12 +109,11 @@ pub fn poll_thread_init() -> bool {
     get_th_init()
 }
 
-pub fn run() {
+pub fn run(is_good: bool) {
     reset_result();
-    spawn_local(async {
+    spawn_local(async move {
         let thread = get_thread().unwrap();
-        let result = exec!(thread, || computation()).await;
-        //let result = exec!(thread, || runner_panics()).await;
+        let result = exec!(thread, || if is_good { computation() } else { computation_panic() }).await;
         log!(result);
         match result {
             Ok(jsval) => {
@@ -130,6 +129,10 @@ pub fn run() {
 
 pub fn poll_thread_result() -> Option<(String, String)> {
     get_result()
+}
+
+pub fn is_crashed() -> bool {
+    get_thread().unwrap().is_terminated()
 }
 
 pub fn reset() {
@@ -155,10 +158,14 @@ fn computation() -> Result<JsValue, JsValue> {
     Ok(JsValue::from_serde(&(s, "".to_string())).unwrap())
 }
 
-#[allow(dead_code)]
-fn runner_panics() -> Result<JsValue, JsValue> {
-    let v: Vec<usize> = vec![];
-    let n = v[0];
-    log!(n);
-    loop {}
+fn computation_panic() -> Result<JsValue, JsValue> {
+    let mut s: String = String::new();
+    let mut v: Vec<u32> = vec![];
+    for i in 0..400000000 {
+        if i % 1000000 == 0 {
+            s += "S";
+        }
+        v.push(0);
+    }
+    Ok(JsValue::from_serde(&(s, "".to_string())).unwrap())
 }

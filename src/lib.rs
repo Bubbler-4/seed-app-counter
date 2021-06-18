@@ -29,7 +29,7 @@ struct Model {
 enum Msg {
     Increment,
     Rendered(RenderInfo),
-    Run,
+    Run(bool),
     Stop,
 }
 
@@ -44,20 +44,27 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             if model.thread_running {
                 let res = runner::poll_thread_result();
                 log!("result received:", res);
-                model.thread_running = res.is_none();
+                let crashed = runner::is_crashed();
+                model.thread_running = res.is_none() && !crashed;
                 if let Some((s1, s2)) = res {
                     model.stdout = s1;
                     model.stderr = s2;
                 }
+                if crashed {
+                    model.thread_ready = false;
+                    model.stderr.clear();
+                    model.stderr += "interpreter crashed";
+                    runner::reset();
+                }
             }
             orders.after_next_render(Msg::Rendered);
         }
-        Msg::Run => {
+        Msg::Run(is_good) => {
             log!("Run clicked");
             model.thread_running = true;
             model.stdout.clear();
             model.stderr.clear();
-            runner::run();
+            runner::run(is_good);
         }
         Msg::Stop => {
             log!("Stop clicked");
@@ -81,7 +88,12 @@ fn view(model: &Model) -> Node<Msg> {
         button![
             attrs!{ At::Disabled => (!model.thread_ready || model.thread_running).as_at_value() },
             "Run!",
-            ev(Ev::Click, |_| Msg::Run),
+            ev(Ev::Click, |_| Msg::Run(true)),
+        ],
+        button![
+            attrs!{ At::Disabled => (!model.thread_ready || model.thread_running).as_at_value() },
+            "Run! (errors)",
+            ev(Ev::Click, |_| Msg::Run(false)),
         ],
         button![
             attrs!{ At::Disabled => (!model.thread_ready || !model.thread_running).as_at_value() },
