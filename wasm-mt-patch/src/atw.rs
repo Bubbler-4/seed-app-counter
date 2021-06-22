@@ -126,7 +126,7 @@ impl Thread {
         let on_message = Self::create_onmessage(rr_map.clone());
         worker.set_onmessage(Some(on_message.as_ref().unchecked_ref::<Function>()));
         let is_terminated = Rc::new(RefCell::new(false));
-        let on_error = Self::create_onerror(is_terminated.clone());
+        let on_error = Self::create_onerror(rr_map.clone());
         worker.set_onerror(Some(on_error.as_ref().unchecked_ref::<Function>()));
 
         Self {
@@ -161,28 +161,17 @@ impl Thread {
         }) as Box<dyn FnMut(MessageEvent)>)
     }
 
-    fn create_onerror(is_terminated: Rc<RefCell<bool>>) -> Closure<dyn FnMut(MessageEvent)> {
+    fn create_onerror(rr_map: Rc<RefCell<RrMap>>) -> Closure<dyn FnMut(MessageEvent)> {
         Closure::wrap(Box::new(move |_me: MessageEvent| {
             console_ln!("terminated by error");
-            *is_terminated.borrow_mut() = true;
-            /*let msg = me.data();
-
-            // debug_ln!("on_message(): msg: {:?}", &msg);
-            if msg == JsValue::NULL {
-                debug_ln!("on_message(): msg: {:?}; oops, `.await` will hang!!", msg);
-                return;
-            }
-
-            let (id, result, is_ok) = atw_decode_result_msg(&msg);
-
             let mut rr_map = rr_map.borrow_mut();
-            assert!(rr_map.get(&id).is_some());
-            let (res, rej) = rr_map.remove(&id).unwrap_throw();
-            assert!(rr_map.get(&id).is_none());
-
-            (if is_ok { res } else { rej })
-                .call1(&JsValue::NULL, &result)
-                .unwrap_throw();*/
+            let cancels = rr_map.len();
+            debug_ln!("cancel_pending_requests(): canceling {} pending reqs", cancels);
+            for (req_id, (_res, rej)) in rr_map.drain() {
+                debug_ln!("canceling req: {}", &req_id);
+                rej.call1(&JsValue::NULL,
+                    &JsValue::from(&format!("Thread: req[{}] canceled", &req_id))).unwrap();
+            }
         }) as Box<dyn FnMut(MessageEvent)>)
     }
 

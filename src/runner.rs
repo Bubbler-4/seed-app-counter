@@ -164,6 +164,7 @@ fn computation_panic() -> Result<JsValue, JsValue> {
     for i in 0..400000000 {
         if i % 1000000 == 0 {
             s += "S";
+            log!(i);
         }
         v.push(0);
     }

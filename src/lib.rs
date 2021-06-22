@@ -31,6 +31,7 @@ enum Msg {
     Rendered(RenderInfo),
     Run(bool),
     Stop,
+    Restart,
 }
 
 fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
@@ -75,6 +76,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.stderr += "aborted";
             runner::reset();
         }
+        Msg::Restart => {
+            model.thread_ready = false;
+            model.thread_running = false;
+            model.stdout.clear();
+            model.stderr.clear();
+            model.stderr += "thread restarted";
+            runner::reset();
+        }
     }
 }
 
@@ -99,6 +108,10 @@ fn view(model: &Model) -> Node<Msg> {
             attrs!{ At::Disabled => (!model.thread_ready || !model.thread_running).as_at_value() },
             "Stop!",
             ev(Ev::Click, |_| Msg::Stop),
+        ],
+        button![
+            "Restart Thread",
+            ev(Ev::Click, |_| Msg::Restart),
         ],
         br![], br![],
         "stdout",
