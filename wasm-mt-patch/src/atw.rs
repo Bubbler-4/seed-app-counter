@@ -106,7 +106,7 @@ pub struct Thread {
     _on_message: Box<Closure<dyn FnMut(MessageEvent)>>,
     _on_error: Box<Closure<dyn FnMut(MessageEvent)>>,
     rr_map: Rc<RefCell<RrMap>>,
-    is_terminated: Rc<RefCell<bool>>,
+    is_terminated: RefCell<bool>,
 }
 
 impl Thread {
@@ -125,7 +125,6 @@ impl Thread {
         let rr_map = Rc::new(RefCell::new(HashMap::new()));
         let on_message = Self::create_onmessage(rr_map.clone());
         worker.set_onmessage(Some(on_message.as_ref().unchecked_ref::<Function>()));
-        let is_terminated = Rc::new(RefCell::new(false));
         let on_error = Self::create_onerror(rr_map.clone());
         worker.set_onerror(Some(on_error.as_ref().unchecked_ref::<Function>()));
 
@@ -134,7 +133,7 @@ impl Thread {
             rr_map,
             _on_message: Box::new(on_message),
             _on_error: Box::new(on_error),
-            is_terminated,
+            is_terminated: RefCell::new(false),
         }
     }
 
